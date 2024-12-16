@@ -8,7 +8,7 @@ typedef struct PublisherTopic {
 	int location;
 	char topic[15];
 	int message;
-	int publicationTime;
+	char publicationTime[20];
 
 } MeasurementResult;
 

@@ -1,63 +1,59 @@
-﻿#include <stdio.h>
-#include <stdlib.h>
-#include <WinSock2.h>
-#include <WS2tcpip.h>
-#include <time.h>
+﻿#include <ws2tcpip.h>
+
+#include <winsock2.h>
 #include <iostream>
-#include <string.h>
-#include <conio.h>
-#include <Windows.h>
-#pragma comment(lib, "Ws2_32.lib")  // Linkovanje sa Winsock bibliotekom
 
-#define PORT 27020
+#pragma comment(lib, "ws2_32.lib")  // Veza sa Windows socket library
 
-// Initialize Winsock
 bool InitializeWindowsSockets() {
     WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        printf("WSAStartup failed.\n");
-        return false;
-    }
-    return true;
+    return WSAStartup(MAKEWORD(2, 2), &wsaData) == 0;
 }
 
 int main() {
+    // Inicijalizacija Windows soketa
     if (!InitializeWindowsSockets()) {
+        std::cerr << "WSAStartup failed with error: " << WSAGetLastError() << std::endl;
         return 1;
     }
 
-    SOCKET connectSocket = INVALID_SOCKET;
-
-    connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (connectSocket == INVALID_SOCKET) {
-        printf("Socket creation failed.\n");
+    // Podešavanje server adrese
+    sockaddr_in serverAddress;
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(27000);  // Port na kojem server osluškuje za publishera
+    if (InetPton(AF_INET, L"127.0.0.1", &serverAddress.sin_addr) <= 0) { // Povezivanje na localhost
+        std::cerr << "Invalid address." << std::endl;
         WSACleanup();
         return 1;
     }
 
-    sockaddr_in serverAddress;
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(PORT);  // Server port
-
-    // Konvertovanje IP adrese u binarni format
-    if (InetPton(AF_INET, L"127.0.0.1", &serverAddress.sin_addr) <= 0) {
-        printf("Invalid address.\n");
-        closesocket(connectSocket);
+    // Kreiranje socket-a za povezivanje
+    SOCKET connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (connectSocket == INVALID_SOCKET) {
+        std::cerr << "Socket creation failed with error: " << WSAGetLastError() << std::endl;
         WSACleanup();
         return 1;
     }
 
     // Povezivanje na server
-    if (connect(connectSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
-        printf("Unable to connect to server.\n");
+    if (connect(connectSocket, (sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
+        std::cerr << "Unable to connect to server. Error: " << WSAGetLastError() << std::endl;
         closesocket(connectSocket);
         WSACleanup();
         return 1;
     }
 
-    printf("Connected to the server.\n");
+    std::cout << "Subscriber connected to server." << std::endl;
 
-    // Čišćenje i zatvaranje socket-a nakon što je povezivanje završeno
+    // Ovdje možete dodati funkcionalnost za prijem podataka od servera
+    char buffer[1024];
+    int bytesReceived = recv(connectSocket, buffer, sizeof(buffer) - 1, 0);
+    if (bytesReceived > 0) {
+        buffer[bytesReceived] = '\0'; // Dodaj null terminator na primljeni string
+        std::cout << "Message from server: " << buffer << std::endl;
+    }
+
+    // Zatvaranje socket-a i čišćenje resursa
     closesocket(connectSocket);
     WSACleanup();
 

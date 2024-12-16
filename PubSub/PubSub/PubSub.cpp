@@ -5,7 +5,8 @@
 #include <string.h>
 #include <ctime>
 #include "PubSub.h"
-#define SERVER_PORT "27019"  // Port servera
+
+
 #define BUFFER_SIZE 100
 
 
@@ -36,7 +37,7 @@ void ReceiveMessage(SOCKET& clientSocket) {
                     std::cout << "  Location: " << message.location << "\n";
                     std::cout << "  Topic: " << message.topic << "\n";
                     std::cout << "  Value: " << message.message << "\n";
-                    std::cout << "  Expiration Time: " << message.publicationTime << "\n";
+                    std::cout << "  Publication Time: " << message.publicationTime << "\n";
                 
 
             }
@@ -70,11 +71,16 @@ int main() {
     publisherAddress.sin_addr.s_addr = INADDR_ANY;
     publisherAddress.sin_port = htons(atoi(SERVER_PORT));
 
-    SOCKET publisherListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    sockaddr_in subscriberAddress;
+    subscriberAddress.sin_family = AF_INET;
+    subscriberAddress.sin_addr.s_addr = INADDR_ANY;
+    subscriberAddress.sin_port = htons(atoi(SERVER1_PORT));
 
+    SOCKET publisherListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    SOCKET subscriberListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
     //Pitamo za gresku kod socketa
-    if (publisherListenSocket == INVALID_SOCKET ) {
+    if (publisherListenSocket == INVALID_SOCKET || subscriberListenSocket == INVALID_SOCKET ) {
         std::cerr << "Socket creation failed with error: " << WSAGetLastError() << std::endl;
         WSACleanup();
         return 1;
@@ -88,25 +94,43 @@ int main() {
         return 1;
     }
 
+    if (bind(subscriberListenSocket, (sockaddr*)&subscriberAddress, sizeof(subscriberAddress)) == SOCKET_ERROR) {
+        std::cerr << "Subscriber bind failed with error: " << WSAGetLastError() << std::endl;
+        closesocket(subscriberListenSocket);
+        WSACleanup();
+        return 1;
+    }
+
     //Listen kod publishera
-    if (listen(publisherListenSocket, SOMAXCONN) == SOCKET_ERROR )
-        /*listen(subscriberListenSocket, SOMAXCONN) == SOCKET_ERROR)*/ {
+    if (listen(publisherListenSocket, SOMAXCONN) == SOCKET_ERROR || 
+        listen(subscriberListenSocket, SOMAXCONN) == SOCKET_ERROR) {
         std::cerr << "Listen failed with error: " << WSAGetLastError() << std::endl;
         closesocket(publisherListenSocket);
-        //closesocket(subscriberListenSocket);
+        closesocket(subscriberListenSocket);
         WSACleanup();
         return 1;
     }
 
     std::cout << "Server is listening for publishers on port: " << SERVER_PORT << std::endl;
-  
+    std::cout << "Server is listening for subscribers on port:" << SERVER1_PORT << std::endl;
+
     SOCKET publisherSocket = accept(publisherListenSocket, NULL, NULL);
     if (publisherSocket != INVALID_SOCKET) {
         std::cout << "Publisher connected.\n";
         ReceiveMessage(publisherSocket);
     }
+
+    SOCKET subscriberSocket = accept(subscriberListenSocket, NULL, NULL);
+    if (subscriberSocket != INVALID_SOCKET) {
+        std::cout << "Subscriber connected.\n";
+        ReceiveMessage(subscriberSocket);
+
+    }
+    
+
     // Zatvaranje servera nakon što je završen rad
     closesocket(publisherListenSocket);
+    closesocket(subscriberListenSocket);
     WSACleanup();
     return 0;
 }

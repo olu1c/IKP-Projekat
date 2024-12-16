@@ -10,8 +10,9 @@
 #include <thread>
 #include <mutex>
 
-#define SERVER_PORT "27019" 
-#define SUBSCRIBER_PORT "27020"
+#define SERVER_PORT "27019"
+#define SERVER1_PORT "27000"
+
 #define BUFFER_SIZE 100
 
 struct PublisherMessage {
@@ -19,7 +20,7 @@ struct PublisherMessage {
     char topic[15];      // Naziv topika
     int message;
     //time_t publicationTime; // Vreme kada je poruka objavljena
-    int publicationTime;
+    char publicationTime[20];
 };
 
 typedef struct Subscriber {

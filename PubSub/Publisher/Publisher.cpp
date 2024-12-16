@@ -6,11 +6,12 @@
 #include <iostream>
 #include <string.h>
 #include <conio.h>
+#include <ctime>
 #include "Publisher.h"
 #include <Windows.h>
 #pragma comment(lib,"WS2_32.lib")
 
-#define PORT 27019
+
 #define BUFFER_SIZE 1024
 
 bool InitializeWindowsSockets() {
@@ -32,8 +33,19 @@ void GenerateRandomMessage(MeasurementResult* result, const char** topics, int t
     // Generišite nasumičnu vrednost poruke
     result->message = rand() % 1000;
 
-    // Postavite trenutno vreme kao vreme objavljivanja
-    result->publicationTime = (rand() % 10) + 10;
+    // Dobavljanje trenutnog vremena
+    std::time_t now = std::time(nullptr);
+    std::tm localTime; // Kreiramo objekat za lokalno vreme
+
+    // Koristimo localtime_s za bezbedno konvertovanje vremena
+    if (localtime_s(&localTime, &now) == 0) {
+        // Formatiraj trenutno vreme u obliku "hh:mm:ss"
+        std::strftime(result->publicationTime, sizeof(result->publicationTime), "%H:%M:%S", &localTime);
+    }
+    else {
+        // U slučaju greške, postavi prazan string
+        strcpy_s(result->publicationTime, sizeof(result->publicationTime), "00:00:00");
+    }
 }
 
 
@@ -54,7 +66,7 @@ int main() {
 
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(PORT);
+    serverAddress.sin_port = htons(27019);
 
     if (InetPton(AF_INET, L"127.0.0.1", &serverAddress.sin_addr) <= 0) {
         printf("Invalid address.\n");
@@ -78,7 +90,6 @@ int main() {
     for (int i = 0; i < 10000; i++) {
         MeasurementResult res;
         GenerateRandomMessage(&res, topics, 3);
- 
 
         // Slanje poruke serveru
         int bytesSent = send(connectSocket, (char*)&res, sizeof(MeasurementResult), 0);
@@ -86,8 +97,8 @@ int main() {
             printf("Failed to send message %d to server. Error: %d\n", i + 1, WSAGetLastError());
         }
         else {
-            printf("Message %d sent: Location=%d, Topic=%s, Value=%d,Time=%d\n",
-                i + 1, res.location, res.topic, res.message ,res.publicationTime);
+            printf("Message %d sent: Location=%d, Topic=%s, Value=%d, Time=%s\n",
+                i + 1, res.location, res.topic, res.message, res.publicationTime);
         }
 
         // Pauza od 2 sekunde pre slanja sledeće poruke
