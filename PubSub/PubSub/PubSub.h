@@ -1,4 +1,4 @@
-#ifndef PUBLISHER_H
+﻿#ifndef PUBLISHER_H
 #define PUBLISHER_H
 #include <stdbool.h>
 #include <time.h>
@@ -10,8 +10,8 @@
 #include <thread>
 #include <mutex>
 
-#define SERVER_PORT "27019"
-#define SERVER1_PORT "27000"
+#define SERVER_PORT 27019
+#define SERVER1_PORT 27000
 
 #define BUFFER_SIZE 100
 
@@ -23,11 +23,29 @@ struct PublisherMessage {
     char publicationTime[20];
 };
 
-typedef struct Subscriber {
-    int id;
-    void* topic;        // Pretplata na topik
-    int location;       // Pretplata na lokaciju
-} Subscriber;
+struct SubscriberRequest {
+    int location;               // Lokacija za koju su podaci potrebni
+    char topic[20];             // Tema (power, voltage, strength)
+    char startTime[20];           // Početno vreme opsega
+    char endTime[20];             // Krajnje vreme opsega
+};
+
+typedef struct {
+    SOCKET connectSocket;
+    SubscriberRequest subscription;
+} SubscriberData;
+
+typedef struct {
+    PublisherMessage buffer[BUFFER_SIZE];
+    int head; // Write position
+    int tail; // Read position
+    int size; // Number of messages in buffer
+    CRITICAL_SECTION cs;
+} CircularBuffer;
+
+void InitializeCircularBuffer(CircularBuffer* cb);
+bool AddMessageToBuffer(CircularBuffer& cb, const PublisherMessage& message);
+
 
 void Connect();
 void subscribeTopic(void* topic);

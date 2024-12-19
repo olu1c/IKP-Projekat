@@ -102,7 +102,7 @@ int main() {
         }
 
         // Pauza od 2 sekunde pre slanja sledeće poruke
-        Sleep(2000);
+        Sleep(5000);
     }
 
     // Čišćenje

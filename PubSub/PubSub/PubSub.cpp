@@ -1,18 +1,11 @@
-﻿#pragma comment(lib, "ws2_32.lib") 
-#include <iostream>
+﻿#include <iostream>
+#include <thread>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <string.h>
-#include <ctime>
+#include <string>
 #include "PubSub.h"
+#pragma comment(lib, "Ws2_32.lib")
 
-
-#define BUFFER_SIZE 100
-
-
-
-
-// Funkcija koja inicijalizuje server
 bool InitializeWindowsSockets() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -22,8 +15,35 @@ bool InitializeWindowsSockets() {
     return true;
 }
 
-// Funkcija koja prihvata konekciju i prima poruku
-void ReceiveMessage(SOCKET& clientSocket) {
+void ReceiveSubscriptionFromClient(SOCKET clientSocket) {
+    SubscriberData subscriber;
+
+    // Prihvatanje podataka o pretplati od klijenta
+    int bytesReceived = recv(clientSocket, (char*)&subscriber, sizeof(SubscriberData), 0);
+
+    if (bytesReceived == SOCKET_ERROR) {
+        printf("Neuspešno primanje podataka o pretplati od klijenta.\n");
+        return;
+    }
+
+    // Ispisivanje podataka o pretplati
+    if (subscriber.subscription.location != -1) {
+        printf("Korisnik se pretplatio na lokaciju: %d\n", subscriber.subscription.location);
+    }
+    else {
+        printf("Korisnik se pretplatio na temu: %s\n", subscriber.subscription.topic);
+    }
+
+    // Ispisivanje vremenskog intervala
+    if (strlen(subscriber.subscription.startTime) > 0 && strlen(subscriber.subscription.endTime) > 0) {
+        printf("Pretplata je za vremenski interval: %s do %s\n", subscriber.subscription.startTime, subscriber.subscription.endTime);
+    }
+    else {
+        printf("Vremenski interval nije postavljen.\n");
+    }
+}
+
+void ReceiveMessage(SOCKET& clientSocket, CircularBuffer& cb) {
     PublisherMessage message;
     int bytesReceived;
 
@@ -31,62 +51,131 @@ void ReceiveMessage(SOCKET& clientSocket) {
         bytesReceived = recv(clientSocket, (char*)&message, sizeof(PublisherMessage), 0);
         if (bytesReceived > 0) {
             if (bytesReceived == sizeof(PublisherMessage)) {
-
-                
-                    std::cout << "Added message to buffer:\n";
+                // Dodajte poruku u bafer
+                if (AddMessageToBuffer(cb, message)) {
+                    std::cout << "Message added to buffer:\n";
                     std::cout << "  Location: " << message.location << "\n";
                     std::cout << "  Topic: " << message.topic << "\n";
                     std::cout << "  Value: " << message.message << "\n";
                     std::cout << "  Publication Time: " << message.publicationTime << "\n";
-                
-
+                }
+                else {
+                    std::cout << "Failed to add message to buffer.\n";
+                }
+            }
+            else {
+                std::cout << "Received message size does not match expected size.\n";
             }
         }
-        else {
+        else if (bytesReceived == 0) {
+            // Publisher se isključio
             std::cout << "Publisher disconnected.\n";
+            break;
+        }
+        else {
+            std::cerr << "Error receiving message: " << WSAGetLastError() << std::endl;
             break;
         }
     }
 
+    // Zatvaranje konekcije sa publisher-om
     closesocket(clientSocket);
-
-   
 }
 
-// Funkcija koja zatvara server
-void CleanupServer(SOCKET& listenSocket) {
-    closesocket(listenSocket);
-    WSACleanup();
+void InitializeCircularBuffer(CircularBuffer* cb) {
+    cb->head = 0;
+    cb->tail = 0;
+    cb->size = 0;
+    InitializeCriticalSection(&cb->cs);
 }
+
+bool ReadMessageFromBuffer(CircularBuffer& cb, PublisherMessage& message) {
+    EnterCriticalSection(&cb.cs);
+
+    if (cb.size > 0) {
+        message = cb.buffer[cb.tail];
+        cb.tail = (cb.tail + 1) % BUFFER_SIZE;
+        cb.size--;
+        LeaveCriticalSection(&cb.cs);
+        return true;
+    }
+
+    LeaveCriticalSection(&cb.cs);
+    return false; // Bafer je prazan
+}
+
+bool AddMessageToBuffer(CircularBuffer& cb, const PublisherMessage& message) {
+    EnterCriticalSection(&cb.cs);
+
+    // Provera da li je bafer pun
+    if (cb.size < BUFFER_SIZE) {
+        cb.buffer[cb.head] = message;
+        cb.head = (cb.head + 1) % BUFFER_SIZE;  // Krug kroz bafer
+        cb.size++;
+
+        std::cout << "Message added to buffer: " << message.message << std::endl;
+        std::cout << "Buffer size: " << cb.size << std::endl; // Prikazivanje trenutne veličine bafera
+
+        LeaveCriticalSection(&cb.cs);
+        return true;
+    }
+
+    LeaveCriticalSection(&cb.cs);
+    std::cout << "Buffer is full, cannot add message." << std::endl;
+    return false; // Bafer je pun
+}
+
+DWORD WINAPI PublisherThread(LPVOID lpParam) {
+    SOCKET publisherSocket = *(SOCKET*)lpParam;
+    CircularBuffer cb;
+    InitializeCircularBuffer(&cb);
+
+    std::cout << "Publisher thread started.\n";
+    ReceiveMessage(publisherSocket, cb);
+
+    return 0;
+}
+
+DWORD WINAPI SubscriberThread(LPVOID lpParam) {
+    SOCKET subscriberSocket = *(SOCKET*)lpParam;
+
+    std::cout << "Subscriber thread started.\n";
+    ReceiveSubscriptionFromClient(subscriberSocket);
+
+    return 0;
+}
+
+
 
 int main() {
-
-    // Inicijalizacija servera
     if (!InitializeWindowsSockets()) {
         return 1;
     }
+    CircularBuffer cb;
+    InitializeCircularBuffer(&cb);
 
+    // Postavljanje adresa i portova
     sockaddr_in publisherAddress;
     publisherAddress.sin_family = AF_INET;
     publisherAddress.sin_addr.s_addr = INADDR_ANY;
-    publisherAddress.sin_port = htons(atoi(SERVER_PORT));
+    publisherAddress.sin_port = htons(SERVER_PORT);
 
     sockaddr_in subscriberAddress;
     subscriberAddress.sin_family = AF_INET;
     subscriberAddress.sin_addr.s_addr = INADDR_ANY;
-    subscriberAddress.sin_port = htons(atoi(SERVER1_PORT));
+    subscriberAddress.sin_port = htons(SERVER1_PORT);
 
+    // Kreiranje socket-a za publisher-a i subscriber-a
     SOCKET publisherListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     SOCKET subscriberListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-    //Pitamo za gresku kod socketa
-    if (publisherListenSocket == INVALID_SOCKET || subscriberListenSocket == INVALID_SOCKET ) {
+    if (publisherListenSocket == INVALID_SOCKET || subscriberListenSocket == INVALID_SOCKET) {
         std::cerr << "Socket creation failed with error: " << WSAGetLastError() << std::endl;
         WSACleanup();
         return 1;
     }
 
-    // Bind publisher socket
+    // Bind za publisher i subscriber socket
     if (bind(publisherListenSocket, (sockaddr*)&publisherAddress, sizeof(publisherAddress)) == SOCKET_ERROR) {
         std::cerr << "Publisher bind failed with error: " << WSAGetLastError() << std::endl;
         closesocket(publisherListenSocket);
@@ -101,34 +190,63 @@ int main() {
         return 1;
     }
 
-    //Listen kod publishera
-    if (listen(publisherListenSocket, SOMAXCONN) == SOCKET_ERROR || 
-        listen(subscriberListenSocket, SOMAXCONN) == SOCKET_ERROR) {
-        std::cerr << "Listen failed with error: " << WSAGetLastError() << std::endl;
+    // Postavljanje socket-a u režim slušanja
+    if (listen(publisherListenSocket, SOMAXCONN) == SOCKET_ERROR) {
+        std::cerr << "Listen for publisher failed with error: " << WSAGetLastError() << std::endl;
         closesocket(publisherListenSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    if (listen(subscriberListenSocket, SOMAXCONN) == SOCKET_ERROR) {
+        std::cerr << "Listen for subscriber failed with error: " << WSAGetLastError() << std::endl;
         closesocket(subscriberListenSocket);
         WSACleanup();
         return 1;
     }
 
     std::cout << "Server is listening for publishers on port: " << SERVER_PORT << std::endl;
-    std::cout << "Server is listening for subscribers on port:" << SERVER1_PORT << std::endl;
+    std::cout << "Server is listening for subscribers on port: " << SERVER1_PORT << std::endl;
 
-    SOCKET publisherSocket = accept(publisherListenSocket, NULL, NULL);
-    if (publisherSocket != INVALID_SOCKET) {
-        std::cout << "Publisher connected.\n";
-        ReceiveMessage(publisherSocket);
+    // Prihvatanje konekcija
+    while (true) {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(publisherListenSocket, &readfds);
+        FD_SET(subscriberListenSocket, &readfds);
+
+        int maxSocket = (publisherListenSocket > subscriberListenSocket) ? publisherListenSocket : subscriberListenSocket;
+        int activity = select(maxSocket + 1, &readfds, NULL, NULL, NULL);
+
+        if (activity == SOCKET_ERROR) {
+            std::cerr << "Select failed with error: " << WSAGetLastError() << std::endl;
+            break;
+        }
+
+        // Provera konekcije za publisher
+        if (FD_ISSET(publisherListenSocket, &readfds)) {
+            SOCKET publisherSocket = accept(publisherListenSocket, NULL, NULL);
+            if (publisherSocket != INVALID_SOCKET) {
+                std::cout << "Publisher connected." << std::endl;
+
+                // Kreiranje niti za publisher
+                CreateThread(NULL, 0, PublisherThread, (LPVOID)&publisherSocket, 0, NULL);
+            }
+        }
+
+        // Provera konekcije za subscriber
+        if (FD_ISSET(subscriberListenSocket, &readfds)) {
+            SOCKET subscriberSocket = accept(subscriberListenSocket, NULL, NULL);
+            if (subscriberSocket != INVALID_SOCKET) {
+                std::cout << "Subscriber connected." << std::endl;
+
+                // Kreiranje niti za subscriber
+                CreateThread(NULL, 0, SubscriberThread, (LPVOID)&subscriberSocket, 0, NULL);
+            }
+        }
     }
 
-    SOCKET subscriberSocket = accept(subscriberListenSocket, NULL, NULL);
-    if (subscriberSocket != INVALID_SOCKET) {
-        std::cout << "Subscriber connected.\n";
-        ReceiveMessage(subscriberSocket);
-
-    }
-    
-
-    // Zatvaranje servera nakon što je završen rad
+    // Zatvaranje socket-a i oslobađanje resursa
     closesocket(publisherListenSocket);
     closesocket(subscriberListenSocket);
     WSACleanup();
