@@ -16,6 +16,7 @@ struct SubscriberRequest {
     char topic[20];
     char startTime[20];
     char endTime[20];
+    //char receiveDataAnswer;
 };
 
 typedef struct {
@@ -28,6 +29,7 @@ void PrintTopicsMenu(const char** topics, int topicCount);
 void PrintTopicsMenu(const char** topics, int topicCount);
 void ChooseSubscription(SubscriberData* subscriber, const char** topics, int topicCount);
 void SendSubscriptionToServer(SubscriberData* subscriber);
+void RequestDataForSubscription(SOCKET connectSocket, SubscriberData* subscriber);
 
 
 #endif // SUBSCRIBER_H

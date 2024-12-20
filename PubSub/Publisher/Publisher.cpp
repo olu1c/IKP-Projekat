@@ -25,7 +25,7 @@ bool InitializeWindowsSockets() {
 
 void GenerateRandomMessage(MeasurementResult* result, const char** topics, int topicCount) {
     // Generišite nasumičnu lokaciju (0-999)
-    result->location = rand() % 100;
+    result->location = rand() % 1000;
 
     // Odaberite nasumičnu temu
     strcpy_s(result->topic, topics[rand() % topicCount]);

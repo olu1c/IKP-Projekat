@@ -13,7 +13,7 @@
 #define SERVER_PORT 27019
 #define SERVER1_PORT 27000
 
-#define BUFFER_SIZE 100
+#define BUFFER_SIZE 1024
 
 struct PublisherMessage {
     int location;
@@ -28,6 +28,7 @@ struct SubscriberRequest {
     char topic[20];             // Tema (power, voltage, strength)
     char startTime[20];           // Početno vreme opsega
     char endTime[20];             // Krajnje vreme opsega
+    //char receiveDataAnswer;
 };
 
 typedef struct {
@@ -43,12 +44,23 @@ typedef struct {
     CRITICAL_SECTION cs;
 } CircularBuffer;
 
+typedef struct HashmapEntry {
+    SubscriberData* subscribers[10];
+    int subscriberCount;
+} HashmapEntry;
+
+HashmapEntry locationSubscribers[1000];  // Keys 0-999
+HashmapEntry topicSubscribers[3];        // Keys "Power", "Voltage", "Strength"
+
 void InitializeCircularBuffer(CircularBuffer* cb);
 bool AddMessageToBuffer(CircularBuffer& cb, const PublisherMessage& message);
 
 
 void Connect();
-void subscribeTopic(void* topic);
+void InitializeHashmaps();
+void AddSubscriberToLocation(int location, SubscriberData* subscriber);
+void AddSubscriberToTopic(const char* topic, SubscriberData* subscriber);
+void subscribeTopic(const char* topic);
 void subscribeLocation(int location);
 void getMessagesTopic(void* startTime, void* endTime);
 void getMessagesLocation(void* startTime, void* endTime);

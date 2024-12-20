@@ -18,6 +18,8 @@ void PrintTopicsMenu(const char** topics, int topicCount) {
     printf("%d. Exit\n", topicCount + 1);
 }
 
+
+
 void ChooseSubscription(SubscriberData* subscriber, const char** topics, int topicCount) {
     int choice;
 
@@ -63,12 +65,6 @@ void ChooseSubscription(SubscriberData* subscriber, const char** topics, int top
         return ChooseSubscription(subscriber, topics, topicCount); // Recursively call in case of invalid choice
     }
 
-    printf("Enter the start time (format: HH:mm:ss): ");
-    scanf_s("%s", subscriber->subscription.startTime, sizeof(subscriber->subscription.startTime));
-
-    printf("Enter the end time (format:  HH:mm:ss): ");
-    scanf_s("%s", subscriber->subscription.endTime, sizeof(subscriber->subscription.endTime));
-
     // Prikazivanje rezultata
     if (subscriber->subscription.location != -1) {
         printf("\nSubscribed to Location: %d\n", subscriber->subscription.location);
@@ -76,8 +72,16 @@ void ChooseSubscription(SubscriberData* subscriber, const char** topics, int top
     else {
         printf("\nSubscribed to Topic: %s\n", subscriber->subscription.topic);
     }
-}
+    printf("Enter the start time (format: HH:mm:ss): ");
+    scanf_s("%s", subscriber->subscription.startTime, sizeof(subscriber->subscription.startTime));
+    printf("Enter the end time (format: HH:mm:ss): ");
+    scanf_s("%s", subscriber->subscription.endTime, sizeof(subscriber->subscription.endTime));
 
+    // Pošaljemo podatke o pretplati na server
+    SendSubscriptionToServer(subscriber);
+
+  
+}
 
 void SendSubscriptionToServer(SubscriberData* subscriber) {
     int bytesSent = send(subscriber->connectSocket,
@@ -91,9 +95,6 @@ void SendSubscriptionToServer(SubscriberData* subscriber) {
         printf("Subscription sent to server successfully.\n");
     }
 }
-
-
-
 
 int main() {
     // Inicijalizacija Windows soketa
@@ -134,9 +135,6 @@ int main() {
 
     subscriber.connectSocket = connectSocket;
     ChooseSubscription(&subscriber, topics, 3);
-    SendSubscriptionToServer(&subscriber);
-
-
 
     // Ovdje možete dodati funkcionalnost za prijem podataka od servera
     char buffer[1024];

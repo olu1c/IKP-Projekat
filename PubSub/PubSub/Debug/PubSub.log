@@ -1,2 +1,3 @@
 ﻿  PubSub.cpp
-  PubSub.vcxproj -> C:\Users\Bogdan\Pictures\IKP-Projekat-main\PubSub\Debug\PubSub.exe
+C:\Users\Bogdan\Desktop\ikp cmt2\IKP-Projekat\PubSub\PubSub\PubSub.cpp(39,20): warning C4566: character represented by universal-character-name '\u0107' cannot be represented in the current code page (1252)
+  PubSub.vcxproj -> C:\Users\Bogdan\Desktop\ikp cmt2\IKP-Projekat\PubSub\Debug\PubSub.exe
