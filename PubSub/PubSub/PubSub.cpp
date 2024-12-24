@@ -6,6 +6,7 @@
 #include "PubSub.h"
 #pragma comment(lib, "Ws2_32.lib")
 
+CircularBuffer cb;
 
 
 bool InitializeWindowsSockets() {
@@ -16,6 +17,46 @@ bool InitializeWindowsSockets() {
     }
     return true;
 }
+
+void ReceiveMessage(SOCKET clientSocket) {
+    PublisherMessage message;
+    int bytesReceived;
+
+    while (true) {
+        bytesReceived = recv(clientSocket, (char*)&message, sizeof(PublisherMessage), 0);
+        if (bytesReceived > 0) {
+            if (bytesReceived == sizeof(PublisherMessage)) {
+                // Dodajte poruku u bafer
+                if (AddMessageToBuffer(&cb,&message)) {
+                    std::cout << "Message added to buffer:\n";
+                    std::cout << "  Location: " << message.location << "\n";
+                    std::cout << "  Topic: " << message.topic << "\n";
+                    std::cout << "  Value: " << message.message << "\n";
+                    std::cout << "  Publication Time: " << message.publicationTime << "\n";
+                }
+                else {
+                    std::cout << "Failed to add message to buffer.\n";
+                }
+            }
+            else {
+                std::cout << "Received message size does not match expected size.\n";
+            }
+        }
+        else if (bytesReceived == 0) {
+            // Publisher se isključio
+            std::cout << "Publisher disconnected.\n";
+            break;
+        }
+        else {
+            std::cerr << "Error receiving message: " << WSAGetLastError() << std::endl;
+            break;
+        }
+    }
+
+    // Zatvaranje konekcije sa publisher-om
+    closesocket(clientSocket);
+}
+
 
 
 void ReceiveSubscriptionFromClient(SOCKET clientSocket) {
@@ -55,87 +96,37 @@ void ReceiveSubscriptionFromClient(SOCKET clientSocket) {
         }
 
         // Dodavanje pretplatnika na odgovarajuću temu ili lokaciju
-        AddSubscriberToTopic(subscriber->subscription.topic, subscriber);
+        //AddSubscriberToTopic(subscriber->subscription.topic, subscriber);
+        if (subscriber->subscription.location != -1) {
+            AddSubscriberToLocation(subscriber->subscription.location, subscriber);
+        }
+        else {
+            AddSubscriberToTopic(subscriber->subscription.topic, subscriber);
+            getMessagesTopic(subscriber->subscription.startTime, subscriber->subscription.endTime);
+
+        }
+
+       
 
     }
     else {
         printf("Failed to receive");
     }
-    /*if (bytesReceived == SOCKET_ERROR) {
-        printf("Neuspešno primanje podataka o pretplati od klijenta.\n");
-        return;
-    }
-
-    if (bytesReceived == 0) {
-        printf("Klijent je zatvorio konekciju.\n");
-        return;
-    }
-
-    // Ispisivanje podataka o pretplati
-    if (subscriber->subscription.location != -1) {
-        printf("Korisnik  se pretplatio na lokaciju: %d\n", subscriber->subscription.location);
-        AddSubscriberToLocation(subscriber->subscription.location, subscriber);
-
-    }
-    else if (strlen(subscriber->subscription.topic) > 0) {
-        printf("Korisnik  se pretplatio na temu: %s\n", subscriber->subscription.topic);
-        //subscribeTopic(subscriber.subscription.topic);
-        AddSubscriberToTopic(subscriber->subscription.topic, subscriber);
-
-    }
-    else {
-        printf("Nevazeci podaci o pretplati (ni lokacija ni topik nisu postavljeni).\n");
-    }
-
-    // Ispisivanje vremenskog intervala
-    if (strlen(subscriber->subscription.startTime) > 0 && strlen(subscriber->subscription.endTime) > 0) {
-        printf("Pretplata je za vremenski interval: %s do %s\n", subscriber->subscription.startTime, subscriber->subscription.endTime);
-    }
-    else {
-        printf("Vremenski interval nije postavljen.\n");
-    }
-    */
+    
    
 }
 
-void ReceiveMessage(SOCKET& clientSocket, CircularBuffer& cb) {
-    PublisherMessage message;
-    int bytesReceived;
+bool isTimeInRange(const char* publicationTime, const char* startTime, const char* endTime) {
+    if (strcmp(publicationTime, startTime) >= 0 && strcmp(publicationTime, endTime) <= 0) {
+        printf("Checking if message time: %s is in range [%s - %s]\n",publicationTime, startTime, endTime);
 
-    while (true) {
-        bytesReceived = recv(clientSocket, (char*)&message, sizeof(PublisherMessage), 0);
-        if (bytesReceived > 0) {
-            if (bytesReceived == sizeof(PublisherMessage)) {
-                // Dodajte poruku u bafer
-                if (AddMessageToBuffer(cb, message)) {
-                    std::cout << "Message added to buffer:\n";
-                    std::cout << "  Location: " << message.location << "\n";
-                    std::cout << "  Topic: " << message.topic << "\n";
-                    std::cout << "  Value: " << message.message << "\n";
-                    std::cout << "  Publication Time: " << message.publicationTime << "\n";
-                }
-                else {
-                    std::cout << "Failed to add message to buffer.\n";
-                }
-            }
-            else {
-                std::cout << "Received message size does not match expected size.\n";
-            }
-        }
-        else if (bytesReceived == 0) {
-            // Publisher se isključio
-            std::cout << "Publisher disconnected.\n";
-            break;
-        }
-        else {
-            std::cerr << "Error receiving message: " << WSAGetLastError() << std::endl;
-            break;
-        }
+        return true;
     }
-
-    // Zatvaranje konekcije sa publisher-om
-    closesocket(clientSocket);
+    return false;
 }
+
+
+
 
 void InitializeCircularBuffer(CircularBuffer* cb) {
     cb->head = 0;
@@ -159,39 +150,93 @@ bool ReadMessageFromBuffer(CircularBuffer& cb, PublisherMessage& message) {
     return false; // Bafer je prazan
 }
 
-bool AddMessageToBuffer(CircularBuffer& cb, const PublisherMessage& message) {
-    EnterCriticalSection(&cb.cs);
+bool AddMessageToBuffer(CircularBuffer* cb, PublisherMessage* message) {
+    EnterCriticalSection(&cb->cs);
 
     // Provera da li je bafer pun
-    if (cb.size < BUFFER_SIZE) {
-        cb.buffer[cb.head] = message;
-        cb.head = (cb.head + 1) % BUFFER_SIZE;  // Krug kroz bafer
-        cb.size++;
+    if (cb->size < BUFFER_SIZE) {
+        cb->buffer[cb->head] = *message;
+        cb->head = (cb->head + 1) % BUFFER_SIZE;  // Krug kroz bafer
+        cb->size++;
 
-        std::cout << "Message added to buffer: " << message.message << std::endl;
-        std::cout << "Buffer size: " << cb.size << std::endl; // Prikazivanje trenutne veličine bafera
+        std::cout << "Message added to buffer: " << message->message << std::endl;
+        std::cout << "Buffer size: " << cb->size << std::endl; // Prikazivanje trenutne veličine bafera
 
-        LeaveCriticalSection(&cb.cs);
+        LeaveCriticalSection(&cb->cs);
         return true;
     }
 
-    LeaveCriticalSection(&cb.cs);
+    LeaveCriticalSection(&cb->cs);
     std::cout << "Buffer is full, cannot add message." << std::endl;
     return false; // Bafer je pun
 }
+
+void getMessagesTopic( const char* startTime, const char* endTime) {
+    // Prolazite kroz sve poruke u bufferu
+    EnterCriticalSection(&cb.cs);
+
+    // Ispis da je funkcija počela sa radom
+    printf("Početak obrade poruka za vremenski interval: %s - %s\n", startTime, endTime);
+    printf("Velicina CircularBuffer-a: %d\n", cb.size);
+
+    for (int i = 0; i < cb.size; ++i) {
+        PublisherMessage& message = cb.buffer[(cb.tail + i) % BUFFER_SIZE];
+        printf("Poruka %d: Tema - %s, Lokacija - %d, Vreme - %s\n", i, message.topic, message.location, message.publicationTime);
+    }
+
+    for (int i = 0; i < cb.size; ++i) {
+        PublisherMessage& message = cb.buffer[(cb.tail + i) % BUFFER_SIZE];
+
+        // Proverite da li je poruka unutar vremenskog intervala
+        if (isTimeInRange(message.publicationTime, startTime, endTime)) {
+            printf("Poruka sa temom %s i lokacijom %d u vremenskom intervalu\n", message.topic, message.location);
+
+            // Nađite odgovarajuće pretplatnike na osnovu teme
+            int index = (strcmp(message.topic, "Power") == 0) ? 0 : (strcmp(message.topic, "Voltage") == 0) ? 1 : 2;
+
+            // Pristupite odgovarajućem HashmapEntry za temu
+            HashmapEntry* entry = &topicSubscribers[index];
+
+            char formattedMessage[100];
+            snprintf(formattedMessage, sizeof(formattedMessage),
+                "Location: %d, Topic: %s, Message: %d", message.location, message.topic, message.message);
+
+            // Ispis broja pretplatnika za temu
+            printf("Broj pretplatnika za temu %s: %d\n", message.topic, entry->subscriberCount);
+
+            // Pošaljite poruku svim pretplatnicima za temu
+            for (int j = 0; j < entry->subscriberCount; ++j) {
+                SubscriberData* subscriber = entry->subscribers[j];
+
+                // Ispis koji pretplatnik prima poruku
+                printf("Slanje poruke pretplatniku na socketu: %d\n", subscriber->connectSocket);
+
+                // Pošaljite poruku pretplatniku
+                send(subscriber->connectSocket, formattedMessage, strlen(formattedMessage), 0);
+            }
+        }
+    }
+
+    // Ispis da je funkcija završila sa radom
+    printf("Obrada poruka završena.\n");
+
+    LeaveCriticalSection(&cb.cs);
+}
+
+
 
 DWORD WINAPI PublisherThread(LPVOID lpParam) {
     SOCKET publisherSocket = *(SOCKET*)lpParam;
 
     // Alociraj CircularBuffer na heap-u
-    CircularBuffer* cb = new CircularBuffer();
-    InitializeCircularBuffer(cb);
+    //CircularBuffer* cb = new CircularBuffer();
+    //InitializeCircularBuffer(cb);
 
     std::cout << "Publisher thread started.\n";
-    ReceiveMessage(publisherSocket, *cb);
+    ReceiveMessage(publisherSocket);
 
     // Oslobodi memoriju nakon upotrebe
-    delete cb;
+    //delete cb;
 
     return 0;
 }
@@ -225,12 +270,20 @@ void AddSubscriberToLocation(int location, SubscriberData* subscriber) {
     HashmapEntry* entry = &locationSubscribers[location];
     if (entry->subscriberCount < 10) {
         entry->subscribers[entry->subscriberCount++] = subscriber;
+        printf("Pretplatnik dodat u mapu");
+
+        //printf("Dodavanje pretplatnika na adresi %p na lokaciju %d\n", (void*)subscriber, location);
+        //for (int i = 0; i < entry->subscriberCount; ++i) {
+            //printf("Pretplatnik %d na adresi %p: %d\n", i + 1, (void*)entry->subscribers[i], entry->subscribers[i]->subscription.location);
+        //}
     }
 }
 
 
 DWORD WINAPI SubscriberThread(LPVOID lpParam) {
     SOCKET subscriberSocket = *(SOCKET*)lpParam;
+    //CircularBuffer* cb = (CircularBuffer*)lpParam;
+
 
     std::cout << "Subscriber thread started.\n";
     ReceiveSubscriptionFromClient(subscriberSocket);
@@ -246,8 +299,8 @@ int main() {
     }
 
     // Alociraj CircularBuffer na heap-u
-    CircularBuffer* cb = new CircularBuffer();
-    InitializeCircularBuffer(cb);
+    //CircularBuffer* cb = new CircularBuffer();
+    InitializeCircularBuffer(&cb);
 
     // Postavljanje adresa i portova
     sockaddr_in publisherAddress;
@@ -344,7 +397,7 @@ int main() {
 
 
     // Oslobađanje resursa
-    delete cb; // Oslobađanje memorije alocirane na heap-u
+    //delete cb; // Oslobađanje memorije alocirane na heap-u
 
     closesocket(publisherListenSocket);
     closesocket(subscriberListenSocket);

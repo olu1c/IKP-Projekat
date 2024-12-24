@@ -28,7 +28,7 @@ struct SubscriberRequest {
     char topic[20];             // Tema (power, voltage, strength)
     char startTime[20];           // Početno vreme opsega
     char endTime[20];             // Krajnje vreme opsega
-    //char receiveDataAnswer;
+   
 };
 
 typedef struct {
@@ -53,7 +53,7 @@ HashmapEntry locationSubscribers[1000];  // Keys 0-999
 HashmapEntry topicSubscribers[3];        // Keys "Power", "Voltage", "Strength"
 
 void InitializeCircularBuffer(CircularBuffer* cb);
-bool AddMessageToBuffer(CircularBuffer& cb, const PublisherMessage& message);
+bool AddMessageToBuffer(CircularBuffer* cb, PublisherMessage* message);
 
 
 void Connect();
@@ -62,9 +62,10 @@ void AddSubscriberToLocation(int location, SubscriberData* subscriber);
 void AddSubscriberToTopic(const char* topic, SubscriberData* subscriber);
 void subscribeTopic(const char* topic);
 void subscribeLocation(int location);
-void getMessagesTopic(void* startTime, void* endTime);
+void getMessagesTopic(const char* startTime, const char* endTime);
 void getMessagesLocation(void* startTime, void* endTime);
 void Publish(void* topic, int location, void* message);
+bool ReadMessageFromBuffer(CircularBuffer& cb, PublisherMessage& message);
 bool InitializeServer();
 void CleanupServer();
 #endif // PUBLISHER_H
