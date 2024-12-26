@@ -1,4 +1,6 @@
 ﻿  PubSub.cpp
-C:\Users\Bogdan\Desktop\ikp cmt2\IKP-Projekat\PubSub\PubSub\PubSub.cpp(80,20): warning C4566: character represented by universal-character-name '\u0107' cannot be represented in the current code page (1252)
-C:\Users\Bogdan\Desktop\ikp cmt2\IKP-Projekat\PubSub\PubSub\PubSub.cpp(179,12): warning C4566: character represented by universal-character-name '\u010D' cannot be represented in the current code page (1252)
-  PubSub.vcxproj -> C:\Users\Bogdan\Desktop\ikp cmt2\IKP-Projekat\PubSub\Debug\PubSub.exe
+C:\Users\Bogdan\Desktop\ikp cmt4\IKP-Projekat\PubSub\PubSub\PubSub.cpp(82,20): warning C4566: character represented by universal-character-name '\u0107' cannot be represented in the current code page (1252)
+C:\Users\Bogdan\Desktop\ikp cmt4\IKP-Projekat\PubSub\PubSub\PubSub.cpp(173,12): warning C4566: character represented by universal-character-name '\u010D' cannot be represented in the current code page (1252)
+C:\Users\Bogdan\Desktop\ikp cmt4\IKP-Projekat\PubSub\PubSub\PubSub.cpp(221,12): warning C4566: character represented by universal-character-name '\u010D' cannot be represented in the current code page (1252)
+C:\Users\Bogdan\Desktop\ikp cmt4\IKP-Projekat\PubSub\PubSub\PubSub.cpp(221,12): warning C4566: character represented by universal-character-name '\u0111' cannot be represented in the current code page (1252)
+  PubSub.vcxproj -> C:\Users\Bogdan\Desktop\ikp cmt4\IKP-Projekat\PubSub\Debug\PubSub.exe

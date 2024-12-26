@@ -96,6 +96,33 @@ void SendSubscriptionToServer(SubscriberData* subscriber) {
     }
 }
 
+DWORD WINAPI ThreadReceiveMessages(LPVOID lpParam) {
+    SubscriberData* subscriber = (SubscriberData*)lpParam;
+    char buffer[100]; // Ensure this is large enough for your formatted message
+    int result;
+    printf("Waiting for messages...\n");
+
+    while (1) {
+        result = recv(subscriber->connectSocket, buffer, sizeof(buffer) - 1, 0);
+        if (result > 0) {
+            //EnterCriticalSection(&cs);
+            buffer[result] = '\0'; // Null-terminate the string
+            printf("\n[Server]: %s\n", buffer);
+            //LeaveCriticalSection(&cs);
+        }
+        else if (result == 0) {
+            printf("Connection closed by server.\n");
+            break;
+        }
+        else {
+            printf("recv failed with error: %d\n", WSAGetLastError());
+            break;
+        }
+    }
+
+    return 0;
+}
+
 int main() {
     // Inicijalizacija Windows soketa
     if (!InitializeWindowsSockets()) {
@@ -136,15 +163,22 @@ int main() {
     subscriber.connectSocket = connectSocket;
     ChooseSubscription(&subscriber, topics, 3);
 
-    // Ovdje možete dodati funkcionalnost za prijem podataka od servera
-    char buffer[1024];
-    int bytesReceived = recv(connectSocket, buffer, sizeof(buffer) - 1, 0);
-    if (bytesReceived > 0) {
-        buffer[bytesReceived] = '\0'; // Dodaj null terminator na primljeni string
-        std::cout << "Message from server: " << buffer << std::endl;
+    HANDLE threadHandle;
+    DWORD threadId;
+    threadHandle = CreateThread(NULL, 0, ThreadReceiveMessages, &subscriber, 0, &threadId);
+    if (threadHandle == NULL) {
+        printf("Failed to create receive thread. Error: %d\n", GetLastError());
+        closesocket(connectSocket);
+        WSACleanup();
+        return 1;
     }
 
-    // Zatvaranje socket-a i čišćenje resursa
+    // Dodajte čekanje na unos korisnika da biste sprečili zatvaranje konzole
+    
+
+    // Oslobađanje resursa
+    WaitForSingleObject(threadHandle, INFINITE); // Čeka da nit završi
+    CloseHandle(threadHandle);
     closesocket(connectSocket);
     WSACleanup();
 

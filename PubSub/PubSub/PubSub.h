@@ -12,8 +12,8 @@
 
 #define SERVER_PORT 27019
 #define SERVER1_PORT 27000
-
-#define BUFFER_SIZE 1024
+#define THREAD_POOL 4
+#define BUFFER_SIZE 10024
 
 struct PublisherMessage {
     int location;
@@ -58,14 +58,12 @@ bool AddMessageToBuffer(CircularBuffer* cb, PublisherMessage* message);
 
 void Connect();
 void InitializeHashmaps();
-void AddSubscriberToLocation(int location, SubscriberData* subscriber);
-void AddSubscriberToTopic(const char* topic, SubscriberData* subscriber);
-void subscribeTopic(const char* topic);
-void subscribeLocation(int location);
+void subscribeLocation(int location, SubscriberData* subscriber);
+void subscribeTopic(const char* topic, SubscriberData* subscriber);
+
 void getMessagesTopic(const char* startTime, const char* endTime);
-void getMessagesLocation(void* startTime, void* endTime);
+void getMessagesLocation(const char* startTime,const char* endTime);
 void Publish(void* topic, int location, void* message);
-bool ReadMessageFromBuffer(CircularBuffer& cb, PublisherMessage& message);
 bool InitializeServer();
 void CleanupServer();
 #endif // PUBLISHER_H
